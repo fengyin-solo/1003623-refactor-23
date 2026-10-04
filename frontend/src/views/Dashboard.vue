@@ -3,12 +3,15 @@
     <header class="page-head">
       <div>
         <h2>运营概览</h2>
-        <p class="page-desc">汇总各业务模块的关键指标，先看总量再看异常。</p>
+        <p class="page-desc">汇总各业务模块的关键指标，先看总量再看异常；值守与气象提醒与各业务页同一来源。</p>
       </div>
       <div class="page-actions">
         <button class="btn" type="button" @click="refresh">重新统计</button>
       </div>
     </header>
+
+    <ReminderPanel title="值守 / 故障 / 气象提醒（关闭台站不催值守，气象页改动在此同步）" :reminders="reminders" />
+
     <div class="stat-row">
       <article v-for="card in cards" :key="card.label" class="stat-card">
         <span class="stat-label">{{ card.label }}</span>
@@ -35,19 +38,47 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
-import { loadOverview } from '@/api/local-service'
+import { listEntries, loadOverview } from '@/api/local-service'
 import type { OverviewResult } from '@/data/types'
+import ReminderPanel from '@/components/ReminderPanel.vue'
+import { buildLookoutReminders, buildWeatherReminders, type Reminder } from '@/domain/reminders'
+import { readLedger, subscribeLookoutStore } from '@/domain/lookout-store'
+import { currentShiftKey } from '@/domain/status-rules'
 
 const cards = ref<OverviewResult['cards']>([])
 const moduleRows = ref<OverviewResult['modules']>([])
+const reminders = ref<Reminder[]>([])
+let unsubscribe: (() => void) | null = null
+
+function collectReminders(): Reminder[] {
+  const lookoutRows = listEntries('lookout').items
+  const weatherRows = listEntries('weather').items
+  // 瞭望台提醒按运行台账判断（关闭后不再催值守），气象提醒与气象页面共用同一函数
+  return [
+    ...buildLookoutReminders(lookoutRows, readLedger(), currentShiftKey()),
+    ...buildWeatherReminders(weatherRows),
+  ].sort((a, b) => {
+    const weight = { danger: 0, warn: 1, info: 2 }
+    return weight[a.level] - weight[b.level]
+  })
+}
 
 function refresh() {
   const payload = loadOverview()
   cards.value = payload.cards
   moduleRows.value = payload.modules
+  reminders.value = collectReminders()
 }
 
-onMounted(refresh)
+onMounted(() => {
+  refresh()
+  // 台账迁移或动作写入后，提醒入口即时同步（含跨标签页 storage 事件）
+  unsubscribe = subscribeLookoutStore(refresh)
+})
+
+onUnmounted(() => {
+  unsubscribe?.()
+})
 </script>

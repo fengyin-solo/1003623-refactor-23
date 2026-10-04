@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "verify:domain": "node scripts/run-verification.mjs domain",
+    "verify:store": "node scripts/run-verification.mjs store",
+    "verify": "npm run verify:domain && npm run verify:store"
   },
   "dependencies": {
     "pinia": "^2.1.7",

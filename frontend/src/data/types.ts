@@ -18,6 +18,12 @@ export type ModuleMeta = {
   actions: string[]
   actionTargets: Record<string, string>
   metrics: string[]
+  /** 已落停状态：未命中者计入待处理（不填则按最后一个状态为终态的旧口径兜底） */
+  settledStatuses?: string[]
+  /** 异常状态：命中者计入异常量（不填则沿用动作动词识别的旧口径） */
+  abnormalStatuses?: string[]
+  /** 终态：命中后拒绝后续动作（不填则无终态限制） */
+  terminalStatuses?: string[]
 }
 
 export type PageResult = {

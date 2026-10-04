@@ -69,3 +69,47 @@ npm run build
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `forest-fire-patrol:entries` 这一项，或调用 `resetModule(模块)`。
+
+## 运行状态规则与瞭望台台账迁移
+
+值守、故障、关闭判断不再散落在列表 / 详情 / 提醒入口，统一收拢到
+`frontend/src/domain/`：
+
+| 文件 | 职责 |
+| --- | --- |
+| `domain/status-rules.ts` | 共用状态机：状态、动作来源白名单、终态、待处理 / 异常口径、班次键 |
+| `domain/lookout-ledger.ts` | 瞭望台运行台账（纯领域）：事件只追加、同班次唯一、乐观锁并发控制 |
+| `domain/lookout-migration.ts` | 存量台账迁移（纯函数）：按台站游标推进、可中断续跑、兼容旧记录 |
+| `domain/lookout-store.ts` | 台账 / 迁移进度的 `localStorage` 持久化、迁移锁、后台可续跑迁移器 |
+| `domain/reminders.ts` | 值守 / 故障 / 气象提醒统一来源，概览页与各业务页共用 |
+
+关键规则：
+
+- **状态不能回退**：瞭望台按「正常值守 → 设备故障 → 维修中 → 正常值守」前向流转，
+  「临时关闭」是终态，关闭后不接受任何动作，也**不再生成值守提醒**。气象观测同样收为
+  纯前向链路（修复旧写法里「确认数据」把已审核打回已录入的回退）。
+- **同一班次只能有一个有效状态**：班次键为 `YYYY-MM-DD/白班|夜班`（白班 08:00-20:00）。
+  台站在某班次的首个结果即该班次唯一有效状态，后来的并发恢复结果返回
+  `duplicate_shift` / `stale` 直接丢弃——并发恢复只接受先到结果。台账带 `version`
+  乐观锁，跨标签页写入用 compare-and-set 兜底。
+- **存量迁移与兼容**：迁移在应用启动后于后台按台站节拍推进，进度记录
+  `nextStationCode`，中断（含关闭页面、跨标签页抢锁，锁带 TTL）后再次进入会**从未迁移
+  台站继续**，已迁移台站不重复。旧记录缺少故障时间时按原「值守日期」归班，连值守日期
+  都没有的老记录进入 `0000-00-00/未登记值守日期` 兼容班次，稳定排在真实班次之前、不丢失。
+- **提醒同步**：运营概览的提醒入口与瞭望台页、气象页调用同一组 `build*Reminders`，
+  气象页的状态修正会同步反映到概览。
+
+验证脚本（纯 Node，esbuild 解析别名，不依赖浏览器）：
+
+```bash
+cd frontend
+npm run verify        # 领域规则 + 持久化迁移
+npm run verify:domain # 仅领域规则：终态、同班次唯一、stale、兼容日期、续跑、提醒
+npm run verify:store  # 仅持久化：逐台站迁移、锁 TTL 接管、幂等
+```
+
+瞭望台台账与迁移进度独立存于：
+
+- `forest-fire-patrol:lookout-ledger`：运行台账（事件流 + version）
+- `forest-fire-patrol:lookout-migration`：迁移游标与统计
+- `forest-fire-patrol:lookout-migration-lock`：迁移锁（owner + TTL）

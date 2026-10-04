@@ -1,4 +1,9 @@
 import type { ModuleMeta } from './types'
+import {
+  LOOKOUT_RULES,
+  WEATHER_RULES,
+  actionTargetsOf,
+} from '@/domain/status-rules'
 
 // 模块元数据由仓库生成时写入：字段、状态、动作、流转目标都在这里，页面不再各自写一遍。
 export const MODULES: ModuleMeta[] = [
@@ -30,10 +35,13 @@ export const MODULES: ModuleMeta[] = [
     entity: "瞭望台",
     desc: "维护瞭望台，围绕瞭望台编号、所在山头、海拔高度、视野覆盖面积做登记、筛选与状态流转。",
     fields: ["瞭望台编号", "所在山头", "海拔高度", "视野覆盖面积", "瞭望员", "通讯方式", "设备配置", "运行状态"],
-    statuses: ["正常值守", "临时关闭", "设备故障", "维修中"],
-    actions: ["记录值守", "登记故障", "关闭瞭望台"],
-    actionTargets: {"记录值守": "正常值守", "登记故障": "设备故障", "关闭瞭望台": "临时关闭"},
+    statuses: [...LOOKOUT_RULES.statuses],
+    actions: LOOKOUT_RULES.transitions.map((item) => item.action),
+    actionTargets: actionTargetsOf(LOOKOUT_RULES),
     metrics: ["瞭望台总数", "正常值守数", "故障台数"],
+    settledStatuses: [...LOOKOUT_RULES.settledStatuses],
+    abnormalStatuses: [...LOOKOUT_RULES.abnormalStatuses],
+    terminalStatuses: [...(LOOKOUT_RULES.terminalStatuses ?? [])],
   },
   {
     key: "firebreak",
@@ -74,10 +82,12 @@ export const MODULES: ModuleMeta[] = [
     entity: "气象观测记录",
     desc: "维护气象观测记录，围绕记录编号、观测站点、观测时间、气温做登记、筛选与状态流转。",
     fields: ["记录编号", "观测站点", "观测时间", "气温", "相对湿度", "风速风向", "降水量", "记录状态"],
-    statuses: ["已录入", "已审核", "已修正", "异常值"],
-    actions: ["提交审核", "确认数据", "标记异常"],
-    actionTargets: {"提交审核": "已审核", "确认数据": "已录入", "标记异常": "异常值"},
+    statuses: [...WEATHER_RULES.statuses],
+    actions: WEATHER_RULES.transitions.map((item) => item.action),
+    actionTargets: actionTargetsOf(WEATHER_RULES),
     metrics: ["今日观测数", "待审核记录", "异常记录数"],
+    settledStatuses: [...WEATHER_RULES.settledStatuses],
+    abnormalStatuses: [...WEATHER_RULES.abnormalStatuses],
   },
   {
     key: "firereport",

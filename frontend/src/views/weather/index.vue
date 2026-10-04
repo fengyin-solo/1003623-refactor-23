@@ -11,8 +11,10 @@
       </div>
     </header>
 
+    <ReminderPanel title="气象提醒（与运营概览同一来源，同步更新）" :reminders="reminders" />
+
     <div class="stat-row">
-      <article v-for="item in stats" :key="item.label" class="stat-card">
+      <article v-for="item in liveStats" :key="item.label" class="stat-card">
         <span class="stat-label">{{ item.label }}</span>
         <strong class="stat-value">{{ item.value }}</strong>
       </article>
@@ -44,17 +46,22 @@
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
-          <td>{{ row.status }}</td>
+          <td>
+            <span :class="['status-tag', statusClass(String(row.status))]">{{ row.status }}</span>
+          </td>
           <td class="row-actions">
-            <button
-              v-for="action in actions"
-              :key="action"
-              class="link"
-              type="button"
-              @click="runAction(action, row)"
-            >
-              {{ action }}
-            </button>
+            <template v-if="rowActions(row).length">
+              <button
+                v-for="action in rowActions(row)"
+                :key="action"
+                class="link"
+                type="button"
+                @click="runAction(action, row)"
+              >
+                {{ action }}
+              </button>
+            </template>
+            <span v-else class="muted-text">当前状态无可用动作</span>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -79,25 +86,51 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { WEATHER_RULES, allowedActions } from '@/domain/status-rules'
+import { buildWeatherReminders } from '@/domain/reminders'
+import type { Reminder } from '@/domain/reminders'
 import type { EntryRow } from '@/data/types'
+import ReminderPanel from '@/components/ReminderPanel.vue'
 
 const meta = moduleMeta('weather')
-const columns = ["记录编号", "观测站点", "观测时间", "气温", "相对湿度", "风速风向", "降水量", "记录状态"]
-const actions = ["提交审核", "确认数据", "标记异常"]
-const statuses = ["已录入", "已审核", "已修正", "异常值"]
-const stats = [{"label": "今日观测数", "value": 0}, {"label": "待审核记录", "value": 0}, {"label": "异常记录数", "value": 0}]
+const columns = meta.fields
+const statuses = [...WEATHER_RULES.statuses]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const reminders = ref<Reminder[]>([])
+
+const liveStats = computed(() => [
+  { label: '今日观测数', value: rows.value.length },
+  {
+    label: '待审核记录',
+    value: rows.value.filter((row) => !WEATHER_RULES.settledStatuses.includes(String(row.status))).length,
+  },
+  {
+    label: '异常记录数',
+    value: rows.value.filter((row) => WEATHER_RULES.abnormalStatuses.includes(String(row.status))).length,
+  },
+])
+
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+function rowActions(row: EntryRow): string[] {
+  return allowedActions(WEATHER_RULES, String(row.status))
+}
+
+function statusClass(status: string): string {
+  if (status === '异常值') return 'tag-danger'
+  if (status === '已录入') return 'tag-warn'
+  return 'tag-normal'
+}
 
 function resetFilters() {
   filters.value = {}
@@ -128,6 +161,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reminders.value = buildWeatherReminders(payload.items)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '气象观测列表读取失败'
   }
