@@ -85,3 +85,6 @@ desktop.ini
 *.db
 *.pid
 *.seed
+
+# ===== 领域自检临时产物 =====
+frontend/scripts/.domain-check.mjs

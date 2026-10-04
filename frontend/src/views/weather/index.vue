@@ -11,6 +11,8 @@
       </div>
     </header>
 
+    <ReminderBanner :reminders="weatherReminders" title="气象提醒" tone="weather" />
+
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
         <span class="stat-label">{{ item.label }}</span>
@@ -79,6 +81,8 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import ReminderBanner from '@/components/ReminderBanner.vue'
+import { buildWeatherReminders, type Reminder } from '@/domain/reminders'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('weather')
@@ -90,6 +94,7 @@ const stats = [{"label": "今日观测数", "value": 0}, {"label": "待审核记
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const weatherReminders = ref<Reminder[]>([])
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -128,6 +133,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    weatherReminders.value = buildWeatherReminders()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '气象观测列表读取失败'
   }

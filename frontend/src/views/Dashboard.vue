@@ -15,6 +15,7 @@
         <strong class="stat-value">{{ card.value }}</strong>
       </article>
     </div>
+    <ReminderBanner :reminders="reminders" title="运行提醒（值守 / 气象）" tone="all" />
     <table class="data-table">
       <thead>
         <tr><th>业务模块</th><th>今日新增</th><th>待处理</th><th>异常量</th></tr>
@@ -38,15 +39,19 @@
 import { onMounted, ref } from 'vue'
 
 import { loadOverview } from '@/api/local-service'
+import ReminderBanner from '@/components/ReminderBanner.vue'
+import { buildAllReminders, type Reminder } from '@/domain/reminders'
 import type { OverviewResult } from '@/data/types'
 
 const cards = ref<OverviewResult['cards']>([])
 const moduleRows = ref<OverviewResult['modules']>([])
+const reminders = ref<Reminder[]>([])
 
 function refresh() {
   const payload = loadOverview()
   cards.value = payload.cards
   moduleRows.value = payload.modules
+  reminders.value = buildAllReminders()
 }
 
 onMounted(refresh)

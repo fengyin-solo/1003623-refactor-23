@@ -69,3 +69,23 @@ npm run build
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `forest-fire-patrol:entries` 这一项，或调用 `resetModule(模块)`。
+
+## 瞭望台运行状态台账
+
+瞭望台的值守、故障、关闭判断不再散落在列表、详情与提醒里，统一收敛到 `frontend/src/domain/`：
+
+- `lookout-status.ts`：运行状态机（正常值守/设备故障/维修中/临时关闭）、动作与流转目标、
+  值守提醒阈值。列表、详情、提醒入口共用这一份写法。
+- `lookout-store.ts`：独立事件台账（localStorage 键 `forest-fire-patrol:lookout-ledger`），
+  事件只追加不改写，当前有效状态由同一班次最新事件派生，历史因此不会回退；写入带版本号
+  CAS，并发恢复只接受先到结果，后到提交得到 `stale`，不覆盖先到数据。
+- `lookout-migration.ts`：存量台账迁移。按台站稳定顺序逐个提交，进度落在
+  `forest-fire-patrol:lookout-migration`，中断后从未迁移台站继续、重复迁移幂等；
+  旧记录缺少「故障时间」时按原「值守日期」兜底，并在事件上打 `faultTimeInferred` 标记。
+  迁移后同一台站同一班次只有一条有效状态。
+- `reminders.ts` + `components/ReminderBanner.vue`：提醒共用写法。只有「正常值守」且超期
+  的台站才产生值守提醒，临时关闭/故障/维修中一律不产生；气象页与运营概览复用同一组件。
+
+迁移入口就在瞭望台页面顶部，可「迁移下一个台站」逐步执行，也可「一次性迁完」。
+领域规则自检：`cd frontend && npm run test:domain`（纯 Node，内存版 localStorage，无需浏览器）。
+
